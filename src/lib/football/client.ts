@@ -1,3 +1,4 @@
+import { throttleFootballApiRequest } from "./rateLimiter";
 import type { Competition, Match, StandingEntry } from "./types";
 
 const API_BASE = "https://api.football-data.org/v4";
@@ -26,6 +27,8 @@ class FootballApiError extends Error {
 async function apiFetch<T>(path: string, revalidateSeconds: number): Promise<T> {
   const key = apiKey();
   if (!key) throw new FootballApiError("No API key configured");
+
+  await throttleFootballApiRequest();
 
   const res = await fetch(`${API_BASE}${path}`, {
     headers: { "X-Auth-Token": key },
