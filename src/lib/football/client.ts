@@ -1,4 +1,4 @@
-import { throttleFootballApiRequest } from "./rateLimiter";
+import { registerServerCooldown, throttleFootballApiRequest } from "./rateLimiter";
 import type { Competition, Match, StandingEntry } from "./types";
 
 const API_BASE = "https://api.football-data.org/v4";
@@ -34,6 +34,12 @@ async function apiFetch<T>(path: string, revalidateSeconds: number): Promise<T> 
     headers: { "X-Auth-Token": key },
     next: { revalidate: revalidateSeconds },
   });
+
+  const remaining = res.headers.get("X-Requests-Available-Minute");
+  const resetSeconds = res.headers.get("X-RequestCounter-Reset");
+  if (remaining !== null && resetSeconds !== null && Number(remaining) <= 1) {
+    registerServerCooldown(Number(resetSeconds));
+  }
 
   if (!res.ok) {
     throw new FootballApiError(`football-data.org request failed: ${res.status}`, res.status);

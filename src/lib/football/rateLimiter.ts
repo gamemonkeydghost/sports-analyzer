@@ -6,11 +6,29 @@
 
 const WINDOW_MS = 60_000;
 const MAX_REQUESTS_PER_WINDOW = 8;
+const MAX_SERVER_COOLDOWN_MS = 65_000;
 
 const requestTimestamps: number[] = [];
+let serverCooldownUntil = 0;
+
+// The API also reports its own counters in response headers
+// (X-Requests-Available-Minute / X-RequestCounter-Reset). When it signals
+// we're nearly out of budget, honor that directly instead of waiting to hit
+// a 429 — this is on top of, not instead of, the fixed local window above.
+export function registerServerCooldown(resetSeconds: number): void {
+  if (!Number.isFinite(resetSeconds)) return;
+  const until = Date.now() + Math.min(Math.max(resetSeconds, 0) * 1000, MAX_SERVER_COOLDOWN_MS);
+  if (until > serverCooldownUntil) serverCooldownUntil = until;
+}
 
 export async function throttleFootballApiRequest(): Promise<void> {
   const now = Date.now();
+
+  if (serverCooldownUntil > now) {
+    await new Promise((resolve) => setTimeout(resolve, serverCooldownUntil - now));
+    return throttleFootballApiRequest();
+  }
+
   while (requestTimestamps.length > 0 && now - requestTimestamps[0] >= WINDOW_MS) {
     requestTimestamps.shift();
   }
